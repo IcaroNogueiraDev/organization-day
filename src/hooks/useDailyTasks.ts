@@ -122,6 +122,7 @@ export function useDailyTasks(date: Date): UseDailyTasksResult {
         try {
             const user_id = await getUserId()
 
+
             // se já existe override recorrente deste dia, só muda p/ skipped
             const { data: updated, error: updErr } = await supabase
                 .from('task_overrides')
