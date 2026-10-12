@@ -12,6 +12,13 @@ function toError(message: string): Error {
     return new Error(message)
 }
 
+/** 'YYYY-MM-DD' na data LOCAL (toISOString usa UTC e erra o dia perto da meia-noite). */
+function toLocalDateString(date: Date): string {
+    const month = String(date.getMonth() + 1).padStart(2, '0')
+    const day = String(date.getDate()).padStart(2, '0')
+    return `${date.getFullYear()}-${month}-${day}`
+}
+
 /**
  * Carrega e muta as tarefas de um dia.
  *
@@ -25,7 +32,7 @@ export function useDailyTasks(date: Date): UseDailyTasksResult {
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState<Error | null>(null)
 
-    const dateStr = date.toISOString().split('T')[0]
+    const dateStr = toLocalDateString(date)
 
     const fetchTasks = useCallback(async () => {
         // setState só após o primeiro await (lint: set-state-in-effect)
