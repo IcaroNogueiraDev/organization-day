@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { useAuth } from "../../hooks/useAuth";
+import { NotificationButton } from "../user/NotificationButton";
 
 interface DashboardLayoutProps {
   children: ReactNode;
@@ -43,6 +44,14 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
       <main className="flex-1 w-full max-w-5xl mx-auto px-4 py-6 md:px-8">
         {children}
       </main>
+
+      <div className="navbar-end gap-2">
+        <span className="hidden sm:inline ...">{user?.email}</span>
+        <NotificationButton />
+        <button className="btn btn-sm btn-outline" onClick={handleSignOut}>
+          Sair
+        </button>
+      </div>
 
       <footer className="footer footer-center p-4 text-xs opacity-60">
         <p>Organization Day — organize sua semana</p>
