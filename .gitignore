@@ -26,3 +26,8 @@ dist-ssr
 
 
 .vercel
+
+# Supabase CLI e segredos
+supabase/.temp/
+*.sql.local
+*.local.sql

@@ -26,7 +26,7 @@ export function NotificationButton() {
     return (
       <>
         {subscriptionError && (
-          <span className="text-xs text-error max-w-40 truncate" title={subscriptionError}>
+          <span className="text-xs text-error max-w-48 break-words" title={subscriptionError}>
             Lembretes com erro: {subscriptionError}
           </span>
         )}
