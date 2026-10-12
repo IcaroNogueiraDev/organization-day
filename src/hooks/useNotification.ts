@@ -12,6 +12,7 @@ function getStatus(): NotificationStatus {
 }
 
 function urlBase64ToUint8Array(base64: string) {
+    if (!base64) throw new Error('VITE_VAPID_PUBLIC_KEY não configurada neste deploy')
     const padding = '='.repeat((4 - (base64.length % 4)) % 4)
     const b64 = (base64 + padding).replace(/-/g, '+').replace(/_/g, '/')
     return Uint8Array.from(atob(b64), (c) => c.charCodeAt(0))
@@ -47,6 +48,8 @@ async function saveSubscription(userId: string) {
  */
 export function useNotifications() {
     const [status, setStatus] = useState<NotificationStatus>(getStatus)
+    // erro ao gravar a inscrição (aparece na tela: no iPhone não há console)
+    const [subscriptionError, setSubscriptionError] = useState<string | null>(null)
     const { user } = useAuth()
     const userId = user?.id
 
@@ -54,7 +57,12 @@ export function useNotifications() {
     // (também atualiza o fuso quando mudar de país)
     useEffect(() => {
         if (status !== 'granted' || !userId) return
-        saveSubscription(userId).catch(console.error)
+        saveSubscription(userId)
+            .then(() => setSubscriptionError(null))
+            .catch((err) => {
+                console.error(err)
+                setSubscriptionError(err instanceof Error ? err.message : 'Erro ao ativar lembretes')
+            })
     }, [status, userId])
 
     const sendTest = useCallback(async () => {
@@ -74,5 +82,5 @@ export function useNotifications() {
         if (result === 'granted') await sendTest()
     }, [sendTest])
 
-    return { status, enable, sendTest }
+    return { status, subscriptionError, enable, sendTest }
 }

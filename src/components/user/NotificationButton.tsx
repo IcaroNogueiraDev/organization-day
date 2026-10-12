@@ -1,7 +1,7 @@
 import { useNotifications } from "../../hooks/useNotification";
 
 export function NotificationButton() {
-  const { status, enable, sendTest } = useNotifications();
+  const { status, subscriptionError, enable, sendTest } = useNotifications();
 
   if (status === "unsupported") {
     return (
@@ -24,9 +24,16 @@ export function NotificationButton() {
 
   if (status === "granted") {
     return (
-      <button className="btn btn-sm btn-ghost" onClick={sendTest}>
-        🔔 Testar
-      </button>
+      <>
+        {subscriptionError && (
+          <span className="text-xs text-error max-w-40 truncate" title={subscriptionError}>
+            Lembretes com erro: {subscriptionError}
+          </span>
+        )}
+        <button className="btn btn-sm btn-ghost" onClick={sendTest}>
+          🔔 Testar
+        </button>
+      </>
     );
   }
 
