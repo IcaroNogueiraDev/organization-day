@@ -50,6 +50,7 @@ export function useNotifications() {
     const [status, setStatus] = useState<NotificationStatus>(getStatus)
     // erro ao gravar a inscrição (aparece na tela: no iPhone não há console)
     const [subscriptionError, setSubscriptionError] = useState<string | null>(null)
+    const [subscribed, setSubscribed] = useState(false)
     const { user } = useAuth()
     const userId = user?.id
 
@@ -57,8 +58,15 @@ export function useNotifications() {
     // (também atualiza o fuso quando mudar de país)
     useEffect(() => {
         if (status !== 'granted' || !userId) return
-        saveSubscription(userId)
-            .then(() => setSubscriptionError(null))
+        // timeout: se o iOS nunca responder, o erro aparece em vez de ficar mudo
+        const timeout = new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error('tempo esgotado ao inscrever no push')), 15000),
+        )
+        Promise.race([saveSubscription(userId), timeout])
+            .then(() => {
+                setSubscriptionError(null)
+                setSubscribed(true)
+            })
             .catch((err) => {
                 console.error(err)
                 setSubscriptionError(err instanceof Error ? err.message : 'Erro ao ativar lembretes')
@@ -82,5 +90,5 @@ export function useNotifications() {
         if (result === 'granted') await sendTest()
     }, [sendTest])
 
-    return { status, subscriptionError, enable, sendTest }
+    return { status, subscribed, subscriptionError, enable, sendTest }
 }

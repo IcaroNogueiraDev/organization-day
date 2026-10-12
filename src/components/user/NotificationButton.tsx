@@ -1,7 +1,7 @@
 import { useNotifications } from "../../hooks/useNotification";
 
 export function NotificationButton() {
-  const { status, subscriptionError, enable, sendTest } = useNotifications();
+  const { status, subscribed, subscriptionError, enable, sendTest } = useNotifications();
 
   if (status === "unsupported") {
     return (
@@ -25,6 +25,11 @@ export function NotificationButton() {
   if (status === "granted") {
     return (
       <>
+        {!subscriptionError && (
+          <span className="text-xs opacity-70">
+            {subscribed ? "✓ Lembretes ativos" : "Ativando lembretes..."}
+          </span>
+        )}
         {subscriptionError && (
           <span className="text-xs text-error max-w-48 break-words" title={subscriptionError}>
             Lembretes com erro: {subscriptionError}
