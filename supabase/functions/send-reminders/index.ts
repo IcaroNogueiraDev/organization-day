@@ -20,12 +20,15 @@ interface DueRow {
   time_start: string
 }
 
+// Quantos minutos antes do horário da tarefa o aviso chega.
+const LEAD_MINUTES = 10
+
 Deno.serve(async (req) => {
   if (req.headers.get('x-cron-secret') !== Deno.env.get('CRON_SECRET')) {
     return new Response('unauthorized', { status: 401 })
   }
 
-  const { data, error } = await supabase.rpc('tasks_due_now')
+  const { data, error } = await supabase.rpc('tasks_due_now', { lead_minutes: LEAD_MINUTES })
   if (error) return new Response(error.message, { status: 500 })
 
   const rows = (data ?? []) as DueRow[]
@@ -40,7 +43,7 @@ Deno.serve(async (req) => {
           { endpoint: row.endpoint, keys: { p256dh: row.p256dh, auth: row.auth } },
           JSON.stringify({
             title: row.title,
-            body: `Agora, ${String(row.time_start).slice(0, 5)}`,
+            body: `${String(row.time_start).slice(0, 5)} · daqui a ${LEAD_MINUTES} min`,
             tag: `${row.title}-${row.time_start}`,
           }),
         )

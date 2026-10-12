@@ -1,6 +1,10 @@
--- Tarefas que começam AGORA, na hora local de cada aparelho inscrito.
--- Chamada só pela Edge Function (service_role).
-create or replace function public.tasks_due_now()
+-- Tarefas que começam daqui a `lead_minutes` minutos, na hora local de cada aparelho inscrito.
+-- Chamada só pela Edge Function (service_role). Pode ser rodado de novo (idempotente).
+
+-- remove a versão antiga (sem parâmetro) para não ficar duas funções com o mesmo nome
+drop function if exists public.tasks_due_now();
+
+create or replace function public.tasks_due_now(lead_minutes int default 10)
 returns table (endpoint text, p256dh text, auth text, title text, time_start time)
 language sql
 security definer
@@ -33,8 +37,10 @@ as $$
   )
   select endpoint, p256dh, auth, title, time_start
   from due
-  where to_char(time_start, 'HH24:MI') = to_char(local_now, 'HH24:MI');
+  -- hora de avisar = horário da tarefa menos a antecedência
+  where to_char(time_start - make_interval(mins => lead_minutes), 'HH24:MI')
+        = to_char(local_now, 'HH24:MI');
 $$;
 
-revoke all on function public.tasks_due_now() from public, anon, authenticated;
-grant execute on function public.tasks_due_now() to service_role;
+revoke all on function public.tasks_due_now(int) from public, anon, authenticated;
+grant execute on function public.tasks_due_now(int) to service_role;
