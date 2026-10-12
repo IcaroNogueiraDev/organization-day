@@ -34,6 +34,7 @@ export interface TaskOverride {
 export interface Profile {
     id: string
     full_name: string | null
+    avatar_url: string | null
     created_at: string
 }
 
@@ -107,6 +108,7 @@ export interface AuthContextValue {
     loading: boolean
     signIn: (email: string, password: string) => Promise<void>
     signUp: (email: string, password: string, fullName: string) => Promise<boolean>
+    signInWithGoogle: () => Promise<void>
     resetPassword: (email: string) => Promise<void>
     updatePassword: (password: string) => Promise<void>
     signOut: () => Promise<void>

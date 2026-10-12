@@ -58,6 +58,14 @@ export function AuthProvider({ children }: AuthProviderProps) {
     return data.session !== null;
   }, []);
 
+  const signInWithGoogle = useCallback(async () => {
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: { redirectTo: `${window.location.origin}/agenda` },
+    });
+    if (error) throw error;
+  }, []);
+
   const resetPassword = useCallback(async (email: string) => {
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
       redirectTo: `${window.location.origin}/nova-senha`,
@@ -76,8 +84,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
   }, []);
 
   const values: AuthContextValue = useMemo(
-    () => ({ user, loading, signIn, signUp, signOut, resetPassword, updatePassword }),
-    [user, loading, signIn, signUp, signOut, resetPassword, updatePassword],
+    () => ({ user, loading, signIn, signUp, signOut, signInWithGoogle, resetPassword, updatePassword }),
+    [user, loading, signIn, signUp, signOut, signInWithGoogle, resetPassword, updatePassword],
   );
 
   return <AuthContext.Provider value={values}>{children}</AuthContext.Provider>;

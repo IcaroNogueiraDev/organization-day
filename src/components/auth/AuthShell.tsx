@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { ArrowLeft, LoaderCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Separator } from '@/components/ui/separator'
 
 export function DecorativeArt({ welcome = false }: { welcome?: boolean }) {
   return welcome ? (
@@ -84,6 +85,7 @@ export function AuthFormShell({
   onSubmit,
   children,
   footer,
+  onGoogle,
 }: {
   id: string
   title: string
@@ -96,6 +98,8 @@ export function AuthFormShell({
   onSubmit: (form: FormData) => void
   children: ReactNode
   footer?: ReactNode
+  /** Quando informado, mostra o botão "Continuar com Google". */
+  onGoogle?: () => void
 }) {
   const navigate = useNavigate()
   const titleId = `${id}-title`
@@ -124,6 +128,18 @@ export function AuthFormShell({
             <Button className="submit-button" variant="submit" type="submit" disabled={loading}>
               {loading ? <LoaderCircle className="spin" aria-label="Carregando" /> : submitLabel}
             </Button>
+            {onGoogle && (
+              <div className="social-login">
+                <div className="social-divider">
+                  <Separator className="social-separator" />
+                  <span>ou continue com</span>
+                </div>
+                <Button className="google-login-button" variant="default" onClick={onGoogle} disabled={loading}>
+                  <span className="google-mark" aria-hidden="true">G</span>
+                  Continuar com Google
+                </Button>
+              </div>
+            )}
             {footer && <p className="switch-prompt">{footer}</p>}
           </form>
         </div>

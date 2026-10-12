@@ -5,7 +5,7 @@ import { useAuth } from '@/hooks/useAuth'
 import { authErrorMessage } from '@/lib/authErrors'
 
 export function LoginPage() {
-  const { user, loading: sessionLoading, signIn } = useAuth()
+  const { user, loading: sessionLoading, signIn, signInWithGoogle } = useAuth()
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
@@ -24,6 +24,16 @@ export function LoginPage() {
     }
   }
 
+  async function handleGoogle() {
+    setError(null)
+    try {
+      // abre a tela do Google; ao voltar, o app cai direto na agenda
+      await signInWithGoogle()
+    } catch (err) {
+      setError(authErrorMessage(err, 'Não foi possível entrar com o Google.'))
+    }
+  }
+
   return (
     <AuthFormShell
       id="login"
@@ -34,6 +44,7 @@ export function LoginPage() {
       loading={loading}
       submitLabel="Entrar"
       onSubmit={handleSubmit}
+      onGoogle={handleGoogle}
       footer={<>Ainda não tem uma conta? <Link className="text-link" to="/cadastro">Criar conta</Link></>}
     >
       <AuthField id="login-email" name="email" label="E-mail" type="email" placeholder="Digite seu e-mail" autoComplete="email" />

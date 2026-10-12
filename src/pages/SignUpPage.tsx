@@ -6,7 +6,7 @@ import { useAuth } from '@/hooks/useAuth'
 import { authErrorMessage } from '@/lib/authErrors'
 
 export function SignUpPage() {
-  const { user, loading: sessionLoading, signUp } = useAuth()
+  const { user, loading: sessionLoading, signUp, signInWithGoogle } = useAuth()
   const [error, setError] = useState<string | null>(null)
   const [info, setInfo] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
@@ -35,6 +35,16 @@ export function SignUpPage() {
     }
   }
 
+  async function handleGoogle() {
+    setError(null)
+    try {
+      // abre a tela do Google; ao voltar, o app cai direto na agenda
+      await signInWithGoogle()
+    } catch (err) {
+      setError(authErrorMessage(err, 'Não foi possível entrar com o Google.'))
+    }
+  }
+
   return (
     <AuthFormShell
       id="signup"
@@ -46,6 +56,7 @@ export function SignUpPage() {
       loading={loading}
       submitLabel="Criar conta"
       onSubmit={handleSubmit}
+      onGoogle={handleGoogle}
       footer={<>Já tem uma conta? <Link className="text-link" to="/entrar">Entrar</Link></>}
     >
       <AuthField id="signup-name" name="name" label="Nome completo" placeholder="Digite seu nome completo" autoComplete="name" />
