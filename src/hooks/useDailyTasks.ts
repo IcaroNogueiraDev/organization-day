@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
+import { toLocalDateString } from '../lib/dates'
 import type {
     DailyTask,
     EditScope,
@@ -12,17 +13,18 @@ function toError(message: string): Error {
     return new Error(message)
 }
 
-/** 'YYYY-MM-DD' na data LOCAL (toISOString usa UTC e erra o dia perto da meia-noite). */
-function toLocalDateString(date: Date): string {
-    const month = String(date.getMonth() + 1).padStart(2, '0')
-    const day = String(date.getDate()).padStart(2, '0')
-    return `${date.getFullYear()}-${month}-${day}`
+async function getUserId() {
+    const {
+        data: { user },
+    } = await supabase.auth.getUser()
+    if (!user) throw new Error('Usuário não autenticado')
+    return user.id
 }
 
 /**
  * Carrega e muta as tarefas de um dia.
  *
- * - Listagem via RPC `get_tasks_for_day`.
+ * - Listagem via RPC `get_day_agenda` (recorrentes + overrides + conclusão).
  * - Escritas em `task_overrides` (só hoje) ou `recurring_tasks` (sempre).
  * - `user_id` é sempre explícito nas escritas (RLS `auth.uid() = user_id`).
  * - Erros do Supabase são lançados como `Error` para a UI mostrar o motivo.
@@ -31,211 +33,213 @@ export function useDailyTasks(date: Date): UseDailyTasksResult {
     const [tasks, setTasks] = useState<DailyTask[]>([])
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState<Error | null>(null)
+    // descarta respostas antigas quando o usuário troca de dia rápido
+    const requestId = useRef(0)
 
     const dateStr = toLocalDateString(date)
+    const dayOfWeek = date.getDay()
 
-    const fetchTasks = useCallback(async () => {
-        // setState só após o primeiro await (lint: set-state-in-effect)
-        try {
+    const fetchTasks = useCallback(
+        async (showLoading: boolean) => {
+            const id = ++requestId.current
+            // setState só após o primeiro await (lint: set-state-in-effect)
             await Promise.resolve()
-            setLoading(true)
-            setError(null)
-            const { data, error } = await supabase.rpc('get_tasks_for_day', {
+            if (showLoading) setLoading(true)
+            const { data, error } = await supabase.rpc('get_day_agenda', {
                 target_date: dateStr,
             })
-
+            if (id !== requestId.current) return
             if (error) {
                 setError(toError(error.message))
             } else {
+                setError(null)
                 setTasks(data as DailyTask[])
             }
-        } finally {
             setLoading(false)
-        }
-    }, [dateStr])
+        },
+        [dateStr],
+    )
 
     useEffect(() => {
-        void fetchTasks()
+        void fetchTasks(true)
     }, [fetchTasks])
 
-    async function getUserId() {
-        const {
-            data: { user },
-        } = await supabase.auth.getUser()
-        if (!user) throw new Error('Usuário não autenticado')
-        return user.id
+    /** Executa uma mutação, guarda o erro para a UI e recarrega a lista. */
+    async function mutate(fallback: string, run: (userId: string) => Promise<void>) {
+        setError(null)
+        try {
+            await run(await getUserId())
+        } catch (err) {
+            const e = err instanceof Error ? err : toError(fallback)
+            setError(e)
+            throw e
+        }
+        await fetchTasks(false)
+    }
+
+    /** Pula/edita só hoje uma recorrente: atualiza o override do dia ou cria um novo. */
+    async function upsertOverride(
+        userId: string,
+        recurringId: string,
+        values: Record<string, unknown>,
+    ) {
+        const { data: updated, error: updErr } = await supabase
+            .from('task_overrides')
+            .update(values)
+            .eq('recurring_task_id', recurringId)
+            .eq('date', dateStr)
+            .eq('user_id', userId)
+            .select('id')
+        if (updErr) throw toError(updErr.message)
+
+        if (!updated || updated.length === 0) {
+            const { error } = await supabase.from('task_overrides').insert({
+                user_id: userId,
+                recurring_task_id: recurringId,
+                date: dateStr,
+                ...values,
+            })
+            if (error) throw toError(error.message)
+        }
     }
 
     async function editTask(task: DailyTask, updates: TaskUpdates, scope: EditScope) {
-        setError(null)
-        try {
+        await mutate('Erro ao editar tarefa', async (userId) => {
             if (scope === 'today') {
-                const user_id = await getUserId()
-
                 if (task.source === 'override') {
                     // já é uma linha em task_overrides → atualiza por id
                     const { error } = await supabase
                         .from('task_overrides')
                         .update(updates)
                         .eq('id', task.id)
-                        .eq('user_id', user_id)
+                        .eq('user_id', userId)
                     if (error) throw toError(error.message)
                 } else {
-                    // recorrente: tenta atualizar o override deste dia; se não
-                    // existir, insere um novo (upsert sem onConflict sempre
-                    // inseriria uma linha duplicada)
-                    const { data: updated, error: updErr } = await supabase
-                        .from('task_overrides')
-                        .update({ ...updates, status: 'edited' })
-                        .eq('recurring_task_id', task.id)
-                        .eq('date', dateStr)
-                        .eq('user_id', user_id)
-                        .select('id')
-                    if (updErr) throw toError(updErr.message)
-
-                    if (!updated || updated.length === 0) {
-                        const { error } = await supabase.from('task_overrides').insert({
-                            user_id,
-                            recurring_task_id: task.id,
-                            date: dateStr,
-                            status: 'edited',
-                            ...updates,
-                        })
-                        if (error) throw toError(error.message)
-                    }
+                    await upsertOverride(userId, task.id, { ...updates, status: 'edited' })
                 }
-            } else {
-                if (task.source === 'override') {
-                    throw new Error(
-                        'Esta tarefa só existe neste dia — use "Salvar só hoje"',
-                    )
-                }
-                const { error } = await supabase
-                    .from('recurring_tasks')
-                    .update(updates)
-                    .eq('id', task.id)
-                if (error) throw toError(error.message)
+                return
             }
-        } catch (err) {
-            const e = err instanceof Error ? err : toError('Erro ao editar tarefa')
-            setError(e)
-            throw e
-        }
-        await fetchTasks()
+
+            // "sempre": só existe definição semanal em tarefas recorrentes
+            const recurringId = task.recurring_task_id
+            if (!recurringId) {
+                throw new Error('Esta tarefa só existe neste dia. Use "Só hoje".')
+            }
+            const { error } = await supabase
+                .from('recurring_tasks')
+                .update(updates)
+                .eq('id', recurringId)
+                .eq('user_id', userId)
+            if (error) throw toError(error.message)
+            // a edição só do dia (se havia) sai de cena: o dia passa a seguir a semanal
+            if (task.source === 'override') {
+                const { error: delErr } = await supabase
+                    .from('task_overrides')
+                    .delete()
+                    .eq('id', task.id)
+                    .eq('user_id', userId)
+                if (delErr) throw toError(delErr.message)
+            }
+        })
     }
 
+    /** Pular hoje = remover só este dia (recorrente vira skipped; avulsa é apagada). */
     async function skipTask(task: DailyTask) {
-        setError(null)
-        try {
-            const user_id = await getUserId()
-
-
-            // se já existe override recorrente deste dia, só muda p/ skipped
-            const { data: updated, error: updErr } = await supabase
-                .from('task_overrides')
-                .update({ status: 'skipped', user_id })
-                .eq('recurring_task_id', task.id)
-                .eq('date', dateStr)
-                .eq('user_id', user_id)
-                .select('id')
-            if (updErr) throw toError(updErr.message)
-
-            if (!updated || updated.length === 0) {
-                const { error } = await supabase.from('task_overrides').insert({
-                    user_id,
-                    recurring_task_id: task.id,
-                    date: dateStr,
-                    status: 'skipped',
-                })
+        await mutate('Erro ao pular tarefa', async (userId) => {
+            if (task.source === 'override') {
+                const { error } = task.recurring_task_id
+                    ? await supabase
+                          .from('task_overrides')
+                          .update({ status: 'skipped' })
+                          .eq('id', task.id)
+                          .eq('user_id', userId)
+                    : await supabase
+                          .from('task_overrides')
+                          .delete()
+                          .eq('id', task.id)
+                          .eq('user_id', userId)
                 if (error) throw toError(error.message)
+            } else {
+                await upsertOverride(userId, task.id, { status: 'skipped' })
             }
-        } catch (err) {
-            const e = err instanceof Error ? err : toError('Erro ao pular tarefa')
-            setError(e)
-            throw e
-        }
-        await fetchTasks()
+        })
     }
 
     async function addTask(
-        { title, time_start, time_end }: NewTaskInput,
-        scope: EditScope
+        { title, description, time_start, time_end }: NewTaskInput,
+        scope: EditScope,
     ) {
-        setError(null)
-        try {
-            const user_id = await getUserId()
-
-            if (scope === 'today') {
-                const { error } = await supabase.from('task_overrides').insert({
-                    user_id,
-                    date: dateStr,
-                    status: 'added',
-                    title,
-                    time_start,
-                    time_end: time_end ?? null,
-                })
-                if (error) throw toError(error.message)
-            } else {
-                const { error } = await supabase.from('recurring_tasks').insert({
-                    user_id,
-                    day_of_week: date.getDay(),
-                    title,
-                    time_start,
-                    time_end: time_end ?? null,
-                    active: true,
-                })
-                if (error) throw toError(error.message)
+        await mutate('Erro ao salvar tarefa', async (userId) => {
+            const base = {
+                user_id: userId,
+                title,
+                description: description || null,
+                time_start,
+                time_end: time_end ?? null,
             }
-        } catch (err) {
-            const e = err instanceof Error ? err : toError('Erro ao salvar tarefa')
-            setError(e)
-            throw e
-        }
-        await fetchTasks()
+            const { error } =
+                scope === 'today'
+                    ? await supabase
+                          .from('task_overrides')
+                          .insert({ ...base, date: dateStr, status: 'added' })
+                    : await supabase
+                          .from('recurring_tasks')
+                          .insert({ ...base, day_of_week: dayOfWeek, active: true })
+            if (error) throw toError(error.message)
+        })
     }
 
     /**
      * Exclui uma tarefa.
-     * - override (avulsa): apaga a linha do dia.
-     * - recorrente + 'today': vira skipped (equivalente a pular).
-     * - recorrente + 'always': soft delete (`active = false`) para não
-     *   quebrar FK dos overrides já criados.
+     * - 'today': só este dia (igual a pular).
+     * - 'always': soft delete da recorrente (`active = false`) para não
+     *   quebrar a FK dos overrides já criados. Avulsas são sempre só do dia.
      */
     async function deleteTask(task: DailyTask, scope: EditScope) {
+        const recurringId = task.recurring_task_id
+        if (scope === 'today' || !recurringId) {
+            await skipTask(task)
+            return
+        }
+        await mutate('Erro ao excluir tarefa', async (userId) => {
+            const { error } = await supabase
+                .from('recurring_tasks')
+                .update({ active: false })
+                .eq('id', recurringId)
+                .eq('user_id', userId)
+            if (error) throw toError(error.message)
+        })
+    }
+
+    /** Concluir/desconcluir: atualiza a tela na hora e desfaz se o banco recusar. */
+    async function toggleComplete(task: DailyTask) {
+        const completed = !task.completed
+        const apply = (value: boolean) =>
+            setTasks((current) =>
+                current.map((t) => (t.task_key === task.task_key ? { ...t, completed: value } : t)),
+            )
+        apply(completed)
         setError(null)
         try {
-            const user_id = await getUserId()
-
-            if (task.source === 'override' || scope === 'today') {
-                if (task.source === 'override') {
-                    const { error } = await supabase
-                        .from('task_overrides')
-                        .delete()
-                        .eq('id', task.id)
-                        .eq('user_id', user_id)
-                    if (error) throw toError(error.message)
-                } else {
-                    // recorrente: apagar só este dia = marcar como skipped
-                    await skipTask(task)
-                    return
-                }
-            }
-
-            if (task.source === 'recurring') {
-                const { error } = await supabase
-                    .from('recurring_tasks')
-                    .update({ active: false })
-                    .eq('id', task.id)
-                    .eq('user_id', user_id)
-                if (error) throw toError(error.message)
-            }
+            const userId = await getUserId()
+            const { error } = completed
+                ? await supabase
+                      .from('task_completions')
+                      .upsert({ user_id: userId, date: dateStr, task_key: task.task_key })
+                : await supabase
+                      .from('task_completions')
+                      .delete()
+                      .eq('user_id', userId)
+                      .eq('date', dateStr)
+                      .eq('task_key', task.task_key)
+            if (error) throw toError(error.message)
         } catch (err) {
-            const e = err instanceof Error ? err : toError('Erro ao excluir tarefa')
+            apply(!completed)
+            const e = err instanceof Error ? err : toError('Erro ao concluir tarefa')
             setError(e)
             throw e
         }
-        await fetchTasks()
     }
 
-    return { tasks, loading, error, editTask, skipTask, addTask, deleteTask }
+    return { tasks, loading, error, editTask, skipTask, addTask, deleteTask, toggleComplete }
 }

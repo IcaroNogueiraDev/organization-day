@@ -1,41 +1,46 @@
-import { useState } from "react";
-import { LoginForm } from "../components/auth/LoginForm";
-import { SignUpForm } from "../components/auth/SignUpForm";
+import { useState } from 'react'
+import { Link, Navigate } from 'react-router-dom'
+import { AuthField, AuthFormShell, SessionLoading } from '@/components/auth/AuthShell'
+import { useAuth } from '@/hooks/useAuth'
+import { authErrorMessage } from '@/lib/authErrors'
 
-/** Tela de acesso: alterna entre login e cadastro. */
 export function LoginPage() {
-  // 0 = login, 1 = registro
-  const [pageIdx, setPageIdx] = useState(0);
+  const { user, loading: sessionLoading, signIn } = useAuth()
+  const [error, setError] = useState<string | null>(null)
+  const [loading, setLoading] = useState(false)
+
+  if (sessionLoading) return <main className="auth-app"><SessionLoading /></main>
+  if (user) return <Navigate to="/agenda" replace />
+
+  async function handleSubmit(form: FormData) {
+    setError(null)
+    setLoading(true)
+    try {
+      // o Navigate acima leva para /agenda quando o AuthContext receber a sessão
+      await signIn(String(form.get('email')).trim(), String(form.get('password')))
+    } catch (err) {
+      setError(authErrorMessage(err, 'Não foi possível entrar.'))
+      setLoading(false)
+    }
+  }
 
   return (
-    <div className="min-h-screen bg-base-200 flex items-center justify-center px-4">
-      <div className="flex flex-col gap-4 w-full max-w-sm">
-        <div className="text-center mb-2">
-          <h1 className="text-2xl font-bold">Organization Day</h1>
-          <p className="text-sm opacity-70">Organize suas tarefas da semana</p>
-        </div>
-
-        <div role="tablist" className="tabs tabs-boxed bg-base-100">
-          <button
-            role="tab"
-            aria-selected={pageIdx === 0}
-            className={`tab ${pageIdx === 0 ? "tab-active" : ""}`}
-            onClick={() => setPageIdx(0)}
-          >
-            Entrar
-          </button>
-          <button
-            role="tab"
-            aria-selected={pageIdx === 1}
-            className={`tab ${pageIdx === 1 ? "tab-active" : ""}`}
-            onClick={() => setPageIdx(1)}
-          >
-            Cadastrar
-          </button>
-        </div>
-
-        {pageIdx === 0 ? <LoginForm /> : <SignUpForm />}
+    <AuthFormShell
+      id="login"
+      title="Boas-vindas de volta"
+      subtitle="Entre para continuar no seu planejador."
+      backTo="/"
+      error={error}
+      loading={loading}
+      submitLabel="Entrar"
+      onSubmit={handleSubmit}
+      footer={<>Ainda não tem uma conta? <Link className="text-link" to="/cadastro">Criar conta</Link></>}
+    >
+      <AuthField id="login-email" name="email" label="E-mail" type="email" placeholder="Digite seu e-mail" autoComplete="email" />
+      <AuthField id="login-password" name="password" label="Senha" type="password" placeholder="Digite sua senha" autoComplete="current-password" />
+      <div className="form-options" style={{ justifyContent: 'flex-end' }}>
+        <Link className="text-link" to="/esqueci-senha">Esqueceu a senha?</Link>
       </div>
-    </div>
-  );
+    </AuthFormShell>
+  )
 }
