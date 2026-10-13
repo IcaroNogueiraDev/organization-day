@@ -19,7 +19,7 @@ function urlBase64ToUint8Array(base64: string) {
 }
 
 /** Inscreve o aparelho no push e grava/atualiza a inscrição (com o fuso atual) no Supabase. */
-async function saveSubscription(userId: string) {
+async function saveSubscription() {
     const registration = await navigator.serviceWorker.ready
     let sub = await registration.pushManager.getSubscription()
     if (!sub) {
@@ -29,16 +29,13 @@ async function saveSubscription(userId: string) {
         })
     }
     const json = sub.toJSON()
-    const { error } = await supabase.from('push_subscriptions').upsert(
-        {
-            user_id: userId,
-            endpoint: sub.endpoint,
-            p256dh: json.keys!.p256dh,
-            auth: json.keys!.auth,
-            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-        },
-        { onConflict: 'endpoint' },
-    )
+    // função no banco: se o aparelho já estava ligado a outra conta, passa para a conta logada
+    const { error } = await supabase.rpc('register_push_subscription', {
+        p_endpoint: sub.endpoint,
+        p_p256dh: json.keys!.p256dh,
+        p_auth: json.keys!.auth,
+        p_timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    })
     if (error) throw new Error(error.message)
 }
 
@@ -62,7 +59,7 @@ export function useNotifications() {
         const timeout = new Promise<never>((_, reject) =>
             setTimeout(() => reject(new Error('tempo esgotado ao inscrever no push')), 15000),
         )
-        Promise.race([saveSubscription(userId), timeout])
+        Promise.race([saveSubscription(), timeout])
             .then(() => {
                 setSubscriptionError(null)
                 setSubscribed(true)
