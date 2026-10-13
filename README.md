@@ -13,7 +13,11 @@
 ![Supabase](https://img.shields.io/badge/Supabase-Postgres%20%2B%20Auth-3ecf8e?logo=supabase&logoColor=white)
 ![PWA](https://img.shields.io/badge/PWA-instal%C3%A1vel-5a0fc8)
 
-<img src="docs/screenshots/login.png" alt="Tela de login do Organization Day" width="720">
+<img src="docs/screenshots/agenda.png" alt="Agenda do dia com a tarefa atual em destaque e as concluídas riscadas" width="330">
+&nbsp;&nbsp;
+<img src="docs/screenshots/login.png" alt="Tela de login com e-mail, senha e botão Continuar com Google" width="520">
+
+<sub>Agenda do dia (esquerda) e tela de entrada (direita)</sub>
 
 </div>
 
