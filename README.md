@@ -28,8 +28,8 @@ Foi criado para uso próprio e evoluído como projeto de estudo de ponta a ponta
 - **Agenda por dia e por semana:** navegue entre os dias e as semanas, cada data tem a sua agenda.
 - **Tarefas recorrentes e avulsas:** crie com nome, descrição e horário; escolha "só hoje" ou "toda semana". Editar, pular e excluir respeitam essa escolha.
 - **Conclusão por dia:** marque uma tarefa como concluída em uma data sem afetar as outras semanas.
-- **Contas:** cadastro e login por e-mail e senha, recuperação de senha e perfil com nome.
-- **Login com Google:** o botão já existe nas telas de entrar e cadastro, mas **ainda não funciona**. O provider está em configuração.
+- **Contas:** cadastro e login por e-mail e senha, recuperação de senha e perfil com nome de exibição editável.
+- **Login com Google:** entre ou crie a conta com um toque, via OAuth do Supabase. O nome vem do perfil Google.
 - **Notificações push no celular:** aviso 10 minutos antes de cada tarefa, calculado no fuso horário do aparelho (funciona também se você viajar).
 - **PWA:** instalável no iPhone e no Android, abre em tela cheia.
 - **Dados isolados por usuário:** Row Level Security no Postgres, cada pessoa só enxerga as próprias tarefas.
@@ -108,6 +108,7 @@ Os scripts em [`supabase/sql`](supabase/sql) são idempotentes e devem rodar no 
 | `02-tasks-due-now.sql` | função que lista as tarefas a avisar (antecedência configurável) |
 | `05-descricao-e-conclusoes.sql` | descrição das tarefas e conclusão por dia |
 | `06-profiles.sql` | perfil do usuário preenchido por trigger |
+| `07-profiles-nome.sql` | permite editar o nome de exibição (política de escrita e limite de tamanho) |
 
 > As tabelas base (`recurring_tasks`, `task_overrides`) e a função `get_tasks_for_day` ainda não estão versionadas neste repositório. Veja o [roadmap](#roadmap).
 
@@ -156,8 +157,8 @@ supabase/
 ## Roadmap
 
 - [ ] Versionar o schema base (`recurring_tasks`, `task_overrides`, `get_tasks_for_day`) para o projeto ser reproduzível do zero
-- [ ] Ativar o login com Google (o botão já existe, falta configurar o provider)
-- [ ] Editar nome e foto do perfil (upload no Supabase Storage)
+- [ ] Foto do perfil (upload no Supabase Storage)
+- [ ] Nome de usuário único (@) e login por ele
 - [ ] Antecedência do lembrete configurável por usuário
 - [ ] Testes automatizados
 

@@ -1,33 +1,42 @@
-import { useEffect, useState } from 'react'
-import { UserRound, X } from 'lucide-react'
+import { useState, type FormEvent } from 'react'
+import { Pencil, UserRound, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
 import { NotificationSection } from '@/components/user/NotificationSection'
 import { useAuth } from '@/hooks/useAuth'
+import { NAME_MAX, useProfile } from '@/hooks/useProfile'
 import { useNavigate } from 'react-router-dom'
-import { supabase } from '@/lib/supabaseClient'
 
 export function ProfileDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
   const { user, signOut } = useAuth()
   const navigate = useNavigate()
-  const [profileName, setProfileName] = useState<string | null>(null)
-  const userId = user?.id
+  const { name, saveName } = useProfile(open)
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [nameError, setNameError] = useState<string | null>(null)
 
-  // nome guardado na tabela profiles (cadastro por e-mail ou Google)
-  useEffect(() => {
-    if (!open || !userId) return
-    supabase
-      .from('profiles')
-      .select('full_name')
-      .eq('id', userId)
-      .maybeSingle()
-      .then(({ data }) => setProfileName(data?.full_name ?? null))
-  }, [open, userId])
+  const startEditing = () => {
+    setDraft(name)
+    setNameError(null)
+    setEditing(true)
+  }
 
-  const metaName = user?.user_metadata?.full_name ?? user?.user_metadata?.name
-  const name =
-    profileName || (typeof metaName === 'string' && metaName ? metaName : user?.email?.split('@')[0] ?? 'Usuário')
+  const handleSaveName = async (event: FormEvent) => {
+    event.preventDefault()
+    setSaving(true)
+    setNameError(null)
+    try {
+      await saveName(draft)
+      setEditing(false)
+    } catch (err) {
+      setNameError(err instanceof Error ? err.message : 'Erro ao salvar o nome')
+    } finally {
+      setSaving(false)
+    }
+  }
 
   const handleSignOut = async () => {
     try {
@@ -54,8 +63,35 @@ export function ProfileDialog({ open, onOpenChange }: { open: boolean; onOpenCha
         <Card className="profile-card">
           <div className="profile-avatar" aria-hidden="true"><UserRound /></div>
           <div className="profile-copy">
-            <strong>{name}</strong>
-            <span>{user?.email ?? 'E-mail não informado'}</span>
+            {editing ? (
+              <form className="profile-name-form" onSubmit={handleSaveName}>
+                <Input
+                  className="profile-name-input"
+                  aria-label="Nome de exibição"
+                  value={draft}
+                  maxLength={NAME_MAX}
+                  autoFocus
+                  autoComplete="name"
+                  disabled={saving}
+                  onChange={(event) => setDraft(event.target.value)}
+                />
+                {nameError && <span className="profile-section-error" role="alert">{nameError}</span>}
+                <div className="profile-name-actions">
+                  <Button variant="submit" type="submit" disabled={saving}>{saving ? 'Salvando...' : 'Salvar'}</Button>
+                  <Button variant="secondary" disabled={saving} onClick={() => setEditing(false)}>Cancelar</Button>
+                </div>
+              </form>
+            ) : (
+              <>
+                <div className="profile-name-row">
+                  <strong>{name}</strong>
+                  <button className="profile-edit" type="button" aria-label="Editar nome" onClick={startEditing}>
+                    <Pencil aria-hidden="true" />
+                  </button>
+                </div>
+                <span>{user?.email ?? 'E-mail não informado'}</span>
+              </>
+            )}
           </div>
         </Card>
         <NotificationSection />
